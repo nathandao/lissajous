@@ -5,90 +5,78 @@
 ; x = Asin(at + phi)
 ; y = Bsin(bt)
 
-(def size 600)
-(def t-scale 40)
+(def size 300)
+(def t-scale 100)
+(def lissajous-box-size (/ size 2))
+(def ds 0.1)
 
-(def ch1 {:amp (/ size 4) :freq 3})
-(def ch2 {:amp (/ size 4) :freq 1})
+(def amp (/ size 4))
+(def ch1 {:amp amp :freq 2.5})
+(def ch2 {:amp amp :freq 3})
 (def phi (q/radians 0))
 
-(q/set-state! {:x1 0 :x2 0 :y1 0 :y2 0})
+(defn update-image []
+  (q/set-state! :image (create-image)))
 
-(defn setup []
-  (q/frame-rate 60)
-  (q/stroke 255)
-  (q/background 0))
+(defn f-ch1 [t s]
+  (let [freq (:freq ch1)]
+    [(* s (/ size t-scale) 2)
+     (* (:amp ch1)
+        (q/sin (+ phi
+                  (* (/ freq (* 2 Math/PI))
+                     (+ s t)))))]))
 
-(defn f-ch1
-  "The coordinates of a sampled point at time t.
-   Plot sine-curve 1 along the x-axis"
-  [s t]
-  [(* s t-scale)
-   (* (:amp ch1)
-      (q/sin (+ (* (/ (:freq ch1) Math/PI) (- s t))
-                phi)))])
+(defn f-ch2 [t s]
+    (let [freq (:freq ch2)]
+      [(* (:amp ch2)
+          (q/sin (* (/ freq (* 2 Math/PI))
+                    (+ (+ s t)))))
+       (* s (/ size t-scale) 2)]))
 
-(defn f-ch2
-  "The coordinates of a sampled point at time t.
-   Plot sine-curve 2 along the y-axis"
-  [s t]
+(defn f-lissajous [t]
   [(* (:amp ch2)
-      (q/sin (* (/ (:freq ch2) Math/PI) (- s t))))
-   (* s t-scale)])
+      (q/sin (* (/ (:freq ch2) (* 2 Math/PI)) t)))
+   (* (:amp ch1)
+      (q/sin (+ (* (/ (:freq ch1) (* 2 Math/PI)) t)
+                phi)))])
 
 (defn draw-channel [f-ch t]
-  (let [ds 0.05]
-    (doseq [s (range 0 (/ size t-scale) ds)]
-      (q/line (f-ch s t)
-              (f-ch (- s ds) t)))))
+  (doseq [s (range 0 t-scale ds)]
+    (q/line (f-ch t s)
+            (f-ch t (+ s ds)))))
 
-(defn draw-screen [x]
-  (q/no-stroke)
-  (q/fill 255 240)
-  (q/rect (- 0 (/ x 2)) (- 0 (/ x 2)) x x))
+(defn draw-lissajous-box [x]
+  (q/image (q/state :image) (- 0 (/ size 4)) (- 0 (/ size 4))))
 
 (defn draw-lissajous [t]
-  (draw-screen (/ size 2))
-  (q/stroke 255 10 10)
-  (q/stroke-weight 3)
-  (let [ds 0.2
-        t0 (if (> (- t 20) 0)
-             (- t 20)
-             0)]
+  (let [t0 (if (> (- t 10) 0) (- t 10) 0)
+        ly (second (f-lissajous (- t ds)))
+        lx (first (f-lissajous (- t ds)))
+        offset (- 0 (/ size 2))]
+
+    (draw-lissajous-box lissajous-box-size)
+
+    (q/stroke 255 220)
+    (q/stroke-weight 1)
+    (q/line [lx ly] [offset ly])
+    (q/line [lx ly] [lx offset])
+
+    (q/stroke 68 242 91)
+    (q/stroke-weight 12)
+    (q/point lx ly)
+
     (doseq [s (range t0 t ds)]
-      (q/stroke 255 50 50 (* 255 (/ (- s t0) 20)))
+      (q/stroke-weight 2)
+      (q/stroke 68 242 91 (* 255 (/ (- s t0) 10)))
       (q/line (f-lissajous s)
-              (f-lissajous (+ s ds))))
+              (f-lissajous (- s ds))))))
 
-    (q/stroke 0 0 255)
-    (q/stroke-weight 10)
-    (q/point (first (f-lissajous (+ t ds)))
-             (last (f-lissajous (+ t ds))))
-
-    (q/stroke-weight 3)
-    (q/line [-300
-             (second (f-lissajous (+ t ds)))]
-            [300
-             (second (f-lissajous (+ t ds)))])
-
-    (q/line [(first (f-lissajous (+ t ds)))
-             -300]
-            [(first (f-lissajous (+ t ds)))
-             300])))
-
-(defn f-lissajous [s]
-  [(* (:amp ch2)
-      (q/sin (* (/ (:freq ch2) Math/PI) (+ s 100))
-                ))
-   (* (:amp ch1)
-      (q/sin (+ (* (/ (:freq ch1) Math/PI)  (+ s 80))
-                phi)))])
 
 (defn draw []
-  (let [t (/ (q/frame-count) 10)]
-    (q/background 0)
-    (q/stroke 255)
-    (q/stroke-weight 3)
+  (let [t (/ (q/frame-count) 5)]
+    (q/background 26 80 118)
+    (q/stroke 175 195 193)
+    (q/stroke-weight 2)
 
     (q/with-translation [0 (/ (q/height) 2)]
       (draw-channel f-ch1 t))
@@ -98,6 +86,24 @@
 
     (q/with-translation [(/ (q/width) 2) (/ (q/height) 2)]
       (draw-lissajous t))))
+
+(defn create-image []
+  (let [width (* 2 amp)
+        im (q/create-image width width :rgb)]
+    (dotimes [x width]
+      (dotimes [y width]
+        (q/set-pixel im x y (q/color 26 80 118 230))))
+    (doseq [s (range 0 2000 0.1)]
+      (let [xy (f-lissajous s)]
+        (q/set-pixel im
+                     (+ (first xy) (/ width 2))
+                     (+ (second xy) (/ width 2))
+                     (q/color 242 90 67))))
+    im))
+
+(defn setup []
+  (q/set-state! :image (create-image))
+  (q/frame-rate 60))
 
 (q/defsketch lissajous
   :size [size size]
